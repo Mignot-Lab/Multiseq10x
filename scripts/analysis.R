@@ -1,4 +1,4 @@
-require(data.table);require(tidyverse);require(xlsx);require(stringdist);require(Matrix)
+require(data.table);require(tidyverse);require(xlsx);require(stringdist);require(Matrix);require(deMULTIplex)
 matrix_dir = '~/Documents/NMDA10x/'
 barcode.path <- paste0(matrix_dir, "barcodes.tsv.gz")
 features.path <- paste0(matrix_dir, "features.tsv.gz")
@@ -126,3 +126,50 @@ for (i in 3:ncol(bar.tsne)) {
   print(g)
 }
 dev.off()
+
+
+bar.table.full <- bar.table2[,2:35]
+rownames(bar.table.full) = bar.table2$cellID
+good.bars <- paste("Bar",1:32,sep="")  # NOTE: In this hypothetical example, barcodes 91-96 were not detected
+bar.table <- bar.table2[, 2:33]  # Remove missing bars and summary columns
+rownames(bar.table) = bar.table2$cellID
+names(bar.table) = good.bars
+bar.table_sweep.list <- list()
+n <- 0
+for (q in seq(0.01, 0.99, by=0.02)) {
+  print(q)
+  n <- n + 1
+  bar.table_sweep.list[[n]] <- classifyCells(bar.table, q=q)
+  names(bar.table_sweep.list)[n] <- paste("q=",q,sep="")
+}
+
+## Identify ideal inter-maxima quantile to set barcode-specific thresholds
+threshold.results1 <- findThresh(call.list=bar.table_sweep.list)
+ggplot(data=threshold.results1$res, aes(x=q, y=Proportion, color=Subset)) + geom_line() + theme(legend.position = "none") +
+  geom_vline(xintercept=threshold.results1$extrema, lty=2) + scale_color_manual(values=c("red","black","blue"))
+
+
+round1.calls <- classifyCells(bar.table, q=findQ(threshold.results1$res, threshold.results1$extrema))
+neg.cells <- names(round1.calls)[which(round1.calls == "Negative")] %>% as.numeric()
+bar.table <- bar.table[-which(rownames(bar.table) %in% bar.table2$cellID[neg.cells]), ]
+
+## Round 2 -----------------------------------------------------------------------------------------------------
+bar.table_sweep.list <- list()
+n <- 0
+for (q in seq(0.01, 0.99, by=0.02)) {
+  print(q)
+  n <- n + 1
+  bar.table_sweep.list[[n]] <- classifyCells(bar.table, q=q)
+  names(bar.table_sweep.list)[n] <- paste("q=",q,sep="")
+}
+
+threshold.results2 <- findThresh(call.list=bar.table_sweep.list)
+round2.calls <- classifyCells(bar.table, q=findQ(threshold.results2$res, threshold.results2$extrema))
+neg.cells <- c(neg.cells, names(round2.calls)[which(round2.calls == "Negative")])
+
+## Repeat until all no negative cells remain (usually 3 rounds)...
+final.calls <- c(round2.calls, rep("Negative",length(neg.cells)))
+names(final.calls) <- c(names(round2.calls),neg.cells)
+
+reclass.cells <- findReclassCells(bar.table, as.numeric(names(final.calls)[which(final.calls=="Negative")]))
+reclass.res <- rescueCells(barTable = bar.table, final.calls, reclass.cells)
