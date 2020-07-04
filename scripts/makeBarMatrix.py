@@ -108,7 +108,7 @@ def main():
     barDict, umiCounterDict, umiTotalDict = processReadtable(readTable, cellSet, bcList)
     writeBartable(outFile, bcList, barDict, umiCounterDict, umiTotalDict)
 
-
+if __name__ == "__main__":main()
 # cellIds = gzip.open('data/barcodes.tsv.gz', 'rb')
 # bcList = [i.strip() for i in open('data/multiSeqBarcodes_1_to_32.txt')]
 # readTable = gzip.open('data/testCompare.csv.gz')
