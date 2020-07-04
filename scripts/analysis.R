@@ -1,5 +1,5 @@
 require(data.table);require(tidyverse);require(xlsx);require(stringdist);require(Matrix);require(deMULTIplex)
-matrix_dir = '~/Documents/NMDA10x/'
+matrix_dir = '~/Documents/NMDA10x/multiSeq/data/'
 barcode.path <- paste0(matrix_dir, "barcodes.tsv.gz")
 features.path <- paste0(matrix_dir, "features.tsv.gz")
 matrix.path <- paste0(matrix_dir, "matrix.mtx.gz")
@@ -52,56 +52,39 @@ GCATGTAC')
 bclistParse=str_split(bclist, pattern = "\n", simplify = T) %>% t() %>% as.character()
 write(bclistParse, file = '~/Documents/NMDA10x/multiSeq/data/multiSeqBarcodes_1_to_32.txt')
 cellIDs=gsub('-1','', barcode.names$V1)#[sample(10000)]
-readTable = fread('~/Documents/NMDA10x/test.csv')
+#readTable = fread('~/Documents/NMDA10x/test.csv')
 
-bar.table <- as.data.frame(matrix(0L, ncol=length(bclistParse)+2, nrow=length(cellIDs)))
-colnames(bar.table) <- c(paste("Bar", 1:length(bclistParse),sep=""), "nUMI", "nUMI_total")
-rownames(bar.table) <- cellIDs
-for (cell in cellIDs){
-  r1.ind <- which(readTable$Cell == cell)
-  umis <- readTable$Umi[r1.ind]
-  tags <- readTable$Sample[r1.ind]
-  bar.table[cell, "nUMI_total"] <- length(umis)
-  tag.dists <- stringdistmatrix(a=tags, b=bclistParse)
-  
-  tag.hds <- apply(tag.dists, 1, min)
-  tag.ind <- which(tag.hds <= 1)
-  if (length(tag.ind) == 0) { next } ## Skip cellIDs with 0 aligned read (bug fix)
-  tag.dists <- tag.dists[tag.ind, ]
-  umis <- umis[tag.ind]
-  umi.ind <- which(duplicated(umis) == FALSE)
-  bar.table[cell,"nUMI"] <- length(umi.ind)
-  for (tag in 1:length(tag.dists)){
-    bar.table[cell,tag] <- length(which(tag.dists[tag] <= 1))
-  }
-}
+readTable <- MULTIseq.preProcess(R1 = 'R1.fastq', R2 = 'R2.fastq', cellIDs = cellIDs, cell=c(1,16), umi=c(17,28), tag=c(1,8))
+bar.table <- MULTIseq.align(readTable, cellIDs, ref = bclistParse)
+setDT(bar.table, keep.rownames = T)
+processed.bartable = fread('~/Documents/NMDA10x/multiSeq/outs/barTableCompare.csv')
 
 
 
 
-readTable
-
-tag.dists=stringdistmatrix(a = , b = bclistParse)
-tag.dists
-tag.hds <- apply(tag.dists, 1, min)
-tag.ind <- which(tag.hds <= 1)
-tag.dists <- tag.dists[tag.ind, ]
 
 
-bar.table2 = fread('~/Documents/NMDA10x/multiSeq/outs/barTable.csv')
-bar.table2
+
+
+
+
+
+
 ## Note: Exclude columns 97:98 (assuming 96 barcodes were used) which provide total barcode UMI counts for each cell. 
 barTSNE <- function(barTable) {
   require(Rtsne)
   
   ## Normalize barcode count matrix
+  ptm <- proc.time()
   n_BC <- ncol(barTable)
   barTable.n <- as.data.frame(log2(barTable))
+  ptm <- proc.time()
   for (i in 1:n_BC) {
     ind <- which(is.finite(barTable.n[,i]) == FALSE)
     barTable.n[ind,i] <- 0
     barTable.n[,i] <- barTable.n[,i]-mean(barTable.n[,i])
   }
+  proc.time() - ptm
   
   ## Run tSNE
   tsne.res <- Rtsne(barTable.n, dims=2, initial_dims=n_BC, verbose=TRUE, check_duplicates=FALSE, max_iter=2500)
@@ -116,7 +99,7 @@ barTSNE <- function(barTable) {
 bar.tsne <- barTSNE(bar.table2[,2:33]) 
 
 
-pdf("~/Documents/NMDA10x/multiSeq/outs/bc.check.pdf")
+pdf("~/Documents/NMDA10x/multiSeq/outs/bcAllStrict.check.pdf")
 for (i in 3:ncol(bar.tsne)) {
   g <- ggplot(bar.tsne, aes(x = TSNE1, y = TSNE2, color = bar.tsne[,i])) +
     geom_point() +
@@ -128,12 +111,11 @@ for (i in 3:ncol(bar.tsne)) {
 dev.off()
 
 
-bar.table.full <- bar.table2[,2:35]
-rownames(bar.table.full) = bar.table2$cellID
+## Round 1 -----------------------------------------------------------------------------------------------------
+## Perform Quantile Sweep
+bar.table.full <- bar.table[, 1:32]#as.data.frame(row.names = bar.table2$cellID, bar.table)
 good.bars <- paste("Bar",1:32,sep="")  # NOTE: In this hypothetical example, barcodes 91-96 were not detected
-bar.table <- bar.table2[, 2:33]  # Remove missing bars and summary columns
-rownames(bar.table) = bar.table2$cellID
-names(bar.table) = good.bars
+bar.table <- bar.table.full[, good.bars]  # Remove missing bars and summary columns
 bar.table_sweep.list <- list()
 n <- 0
 for (q in seq(0.01, 0.99, by=0.02)) {
@@ -148,10 +130,10 @@ threshold.results1 <- findThresh(call.list=bar.table_sweep.list)
 ggplot(data=threshold.results1$res, aes(x=q, y=Proportion, color=Subset)) + geom_line() + theme(legend.position = "none") +
   geom_vline(xintercept=threshold.results1$extrema, lty=2) + scale_color_manual(values=c("red","black","blue"))
 
-
+## Finalize round 1 classifications, remove negative cells
 round1.calls <- classifyCells(bar.table, q=findQ(threshold.results1$res, threshold.results1$extrema))
-neg.cells <- names(round1.calls)[which(round1.calls == "Negative")] %>% as.numeric()
-bar.table <- bar.table[-which(rownames(bar.table) %in% bar.table2$cellID[neg.cells]), ]
+neg.cells <- names(round1.calls)[which(round1.calls == "Negative")]
+bar.table <- bar.table[-which(rownames(bar.table) %in% neg.cells), ]
 
 ## Round 2 -----------------------------------------------------------------------------------------------------
 bar.table_sweep.list <- list()
@@ -171,5 +153,31 @@ neg.cells <- c(neg.cells, names(round2.calls)[which(round2.calls == "Negative")]
 final.calls <- c(round2.calls, rep("Negative",length(neg.cells)))
 names(final.calls) <- c(names(round2.calls),neg.cells)
 
-reclass.cells <- findReclassCells(bar.table, as.numeric(names(final.calls)[which(final.calls=="Negative")]))
-reclass.res <- rescueCells(barTable = bar.table, final.calls, reclass.cells)
+
+
+## Perform semi-supervised negative cell reclassification
+reclass.cells <- findReclassCells(bar.table.full, neg.cells = unique(names(final.calls)[which(final.calls=="Negative")]))
+reclass.res <- rescueCells(bar.table.full, final.calls, reclass.cells)
+ggplot(reclass.res[-1, ], aes(x=ClassStability, y=MatchRate_mean)) + 
+  geom_point() + xlim(c(nrow(reclass.res)-1,1)) + 
+  ylim(c(0,1.05)) +
+  geom_errorbar(aes(ymin=MatchRate_mean-MatchRate_sd, ymax=MatchRate_mean+MatchRate_sd), width=.1) +
+  geom_hline(yintercept = reclass.res$MatchRate_mean[1], color="red") +
+  geom_hline(yintercept = reclass.res$MatchRate_mean[1]+3*reclass.res$MatchRate_sd[1], color="red",lty=2) +
+  geom_hline(yintercept = reclass.res$MatchRate_mean[1]-3*reclass.res$MatchRate_sd[1], color="red",lty=2)
+
+## Finalize negative cell rescue results
+final.calls.rescued <- final.calls
+rescue.ind <- which(reclass.cells$ClassStability >= 20) ## Note: Value will be dataset-specific
+final.calls.rescued[rownames(reclass.cells)[rescue.ind]] <- reclass.cells$Reclassification[rescue.ind]
+### check align
+cellIDS = c(bar.table2$cellID[1:30])
+bar.ref = bclistParse
+readTable = fread('~/Documents/NMDA10x/multiSeq/data/Multi-seq1_S89_L003_ReadTable.csv.gz')
+readTable = as.data.frame(readTable)
+bar.table.de <- MULTIseq.align(readTable, cellIDS, bar.ref)
+
+
+
+
+

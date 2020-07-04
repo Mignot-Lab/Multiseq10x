@@ -1,6 +1,15 @@
 import gzip
 from collections import defaultdict
 import distance
+import argparse
+
+
+def gzipHandle(fileName):
+    if '.gz' in fileName:
+        fileOut = gzip.open(fileName, 'rb')
+    else:
+        fileOut = open(fileName, 'rb')
+    return fileOut
 
 def tagDist(tag, bcList):
     '''returns 1 mismatch tag closest sample barcode
@@ -15,65 +24,91 @@ def tagDist(tag, bcList):
             return outTag
         else:
             return None
+    else:
+        raise ValueError('NO VALID TAG WAS FOUND')
 
 
-cellIds = gzip.open('data/barcodes.tsv.gz', 'rb')
-bcList = [i.strip() for i in open('data/multiSeqBarcodes_1_to_32.txt')]
-readTable = gzip.open('data/Multi-seq1_S89_L003_ReadTable.csv.gz')
+def processCellIds(cellIdFile):
+    '''takes in a cell ranger output such as barcodes.tsv.gz
+    '''
+    cellIds = gzipHandle(cellIdFile)
+    cellSet = defaultdict(str)
+    for n,cell in enumerate(cellIds):
+        cellParse = cell.decode().strip().split('-')[0]
+        cellSet[cellParse]= ''
+    print('PROCESSED {} CELLS '.format(n))
+    cellIds.close()
+    return cellSet
 
-cellSet = defaultdict(str)
-for cell in cellIds:
-    cellParse = cell.decode().strip().split('-')[0]
-    cellSet[cellParse]= ''
-cellIds.close()
-
-barDict = defaultdict(lambda:defaultdict(int))
-umiDict = defaultdict(set)
-umiCounterDict = defaultdict(int)
-umiTotalDict = defaultdict(int)
-
-for n, line in enumerate(readTable):
-    if n > 0:
-        cell, umi, tag = line.decode().strip().split(',')
-        umiDict[cell].add('')
-        umiTotalDict[cell] += 1
-        if cell in cellSet:
-            if tag in bcList:
-                if umi not in umiDict.get(cell):
-                    barDict[cell][tag] += 1
-                    umiDict[cell].add(umi)
-                    umiCounterDict[cell] += 1
-            else:
-                #continue
-                outTag=tagDist(tag, bcList)
-                if outTag is not None:
+def processReadtable(readTable, cellSet, bcList):
+    '''this function quantifies the frequency of cellids and sample barcode combinations
+    if the sample barcode does not match a hamming distance is called to check 
+    if there is 1 nucleotide mismatch and if found will be added to respective count
+    '''
+    barDict = defaultdict(lambda:defaultdict(int))
+    umiDict = defaultdict(set)
+    umiCounterDict = defaultdict(int)
+    umiTotalDict = defaultdict(int)
+    readTableHandle = gzipHandle(readTable)
+    for n, line in enumerate(readTableHandle):
+        if n > 0:
+            cell, umi, tag = line.decode().strip().split(',')
+            umiDict[cell].add('')
+            umiTotalDict[cell] += 1
+            if cell in cellSet:
+                if tag in bcList:
                     if umi not in umiDict.get(cell):
                         barDict[cell][tag] += 1
                         umiDict[cell].add(umi)
                         umiCounterDict[cell] += 1
-        if n % 10000 == 0:
-            print('PROCESSED {} READS '.format(n))
+                else:
+                    outTag=tagDist(tag, bcList)
+                    if outTag is not None:
+                        if umi not in umiDict.get(cell):
+                            barDict[cell][tag] += 1
+                            umiDict[cell].add(umi)
+                            umiCounterDict[cell] += 1
+            if n % 10000 == 0:
+                print('PROCESSED {} READS '.format(n))
+    return[barDict, umiCounterDict, umiTotalDict]
             
-outFile = open('outs/barTable.csv', 'w')
-outFile.write('cellID,'+','.join(bcList)+',nUMI,nUMITotal'+'\n')
-for k, v in barDict.items():
-    outString =k
-    for bc in bcList:
-        if bc in v:
-            outString += ','+str(v.get(bc))
+def writeBartable(outFile, bcList, barDict, umiCounterDict, umiTotalDict):
+    outFile = open('outs/'+outFile, 'w')
+    outFile.write('cellID,'+','.join(bcList)+',nUMI,nUMI_Total'+'\n')
+    for k, v in barDict.items():
+        outString =k
+        for bc in bcList:
+            if bc in v:
+                outString += ','+str(v.get(bc))
+            else:
+                outString += ','+'0'
+        if k in umiCounterDict:
+            outString += ','+str(umiCounterDict.get(k))
         else:
             outString += ','+'0'
-    if k in umiCounterDict:
-        outString += ','+str(umiCounterDict.get(k))
-    else:
-        outString += ','+'0'
-    if k in umiTotalDict:
-        outString += ','+str(umiTotalDict.get(k))
-    else:
-        outString += ','+'0'
-    outFile.write(outString +'\n')
-outFile.close()
+        if k in umiTotalDict:
+            outString += ','+str(umiTotalDict.get(k))
+        else:
+            outString += ','+'0'
+        outFile.write(outString +'\n')
+    outFile.close()
+
+def main():
+    parser = argparse.ArgumentParser(description='A script to make CELL.ID vs Barcode count when a ReadTable is input ')
+    parser.add_argument('-C', help='Cell Ids list', required=True)
+    parser.add_argument('-R', help='ReadTable as generated by makeReadTable.py', required=True)
+    parser.add_argument('-B', help='Sample Barcode file', required=True)
+    parser.add_argument('-O', help='Output file name', required=True)
+    args=parser.parse_args()
+    cellIds = args.C
+    bcList = args.B
+    readTable = args.R
+    outFile = args.O
+    cellSet = processCellIds(cellIds)
+    barDict, umiCounterDict, umiTotalDict = processReadtable(readTable, cellSet, bcList)
+    writeBartable(outFile, bcList, barDict, umiCounterDict, umiTotalDict)
 
 
-
-
+# cellIds = gzip.open('data/barcodes.tsv.gz', 'rb')
+# bcList = [i.strip() for i in open('data/multiSeqBarcodes_1_to_32.txt')]
+# readTable = gzip.open('data/testCompare.csv.gz')
