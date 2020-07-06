@@ -3,7 +3,6 @@ import gzip
 import re
 import os
 import argparse
-from multiprocessing import Pool
 
 def processCellbarcode(barCodefile):
     '''takes in processed cell ranger barcode raw file 
