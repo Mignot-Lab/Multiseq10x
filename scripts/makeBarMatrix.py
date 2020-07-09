@@ -50,9 +50,12 @@ def processReadtable(readTable, cellSet, bcList):
     umiCounterDict = defaultdict(int)
     umiTotalDict = defaultdict(int)
     readTableHandle = gzipHandle(readTable)
+    bcListParsed = [i.strip() for i in open(bcList)]
+    print(bcListParsed)
     for n, line in enumerate(readTableHandle):
         if n > 0:
             cell, umi, tag = line.decode().strip().split(',')
+            #print(tag)
             umiDict[cell].add('')
             umiTotalDict[cell] += 1
             if cell in cellSet:
@@ -62,7 +65,7 @@ def processReadtable(readTable, cellSet, bcList):
                         umiDict[cell].add(umi)
                         umiCounterDict[cell] += 1
                 else:
-                    outTag=tagDist(tag, bcList)
+                    outTag=tagDist(tag, bcListParsed)
                     if outTag is not None:
                         if umi not in umiDict.get(cell):
                             barDict[cell][tag] += 1
@@ -73,7 +76,7 @@ def processReadtable(readTable, cellSet, bcList):
     return[barDict, umiCounterDict, umiTotalDict]
             
 def writeBartable(outFile, bcList, barDict, umiCounterDict, umiTotalDict):
-    outFile = open('outs/'+outFile, 'w')
+    outFile = open(outFile, 'w')
     outFile.write('cellID,'+','.join(bcList)+',nUMI,nUMI_Total'+'\n')
     for k, v in barDict.items():
         outString =k
