@@ -3,6 +3,7 @@ import gzip
 import re
 import os
 import argparse
+from makeBarMatrix import gzipHandle
 
 def processCellbarcode(barCodefile):
     '''takes in processed cell ranger barcode raw file 
@@ -10,7 +11,7 @@ def processCellbarcode(barCodefile):
     '''
     cellIDs = set()
     lineN = 0
-    for sampleId in gzip.open(barCodefile, 'rb'):
+    for sampleId in gzipHandle(barCodefile):
         lineN += 1
         if lineN % 100000 == 0:
             print('PROCESSED LINES {} FROM {}'.format(lineN, barCodefile))
@@ -63,21 +64,7 @@ def main():
 
 if __name__ == "__main__":main()
 
-#     multiseq_path = "/labs/mignot/10xNMDA/191231_A00351_0308_BH2LW7DSXY_10x/YS-JY-16"
-#     cellIDs = processCellbarcode("/labs/mignot/10xNMDA/191231_A00351_0308_BH2LW7DSXY_10x/10xRUN_cDNA1_3/outs/raw_feature_bc_matrix/barcodes.tsv.gz")
-#     print("There are {} cellIDs".format(len(cellIDs)))
-
-#     # Get all eligible R1 and R2 paths
-#     r1_paths = []
-#     r2_paths = []
-#     for path in os.listdir(multiseq_path):
-#         if path.startswith("Multi-seq"):
-#             if path.endswith("R1_001.fastq.gz"):
-#                 r1_paths.append(path)
-#             elif path.endswith("R2_001.fastq.gz"):
-#                 r2_paths.append(path)
-#     r1_paths.sort()
-#     r2_paths.sort()
+#     
     
 #     with Pool(32) as p:
 #         print(p.map(preprocess, zip(r1_paths, r2_paths)))
