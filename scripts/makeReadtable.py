@@ -24,8 +24,8 @@ def readTable(R1path, R2path, outReadTable, cellIDs):
     cell_start, cell_end = cell
     umi_start, umi_end = umi
     tag_start, tag_end = tag
-    R1File = gzip.open(R1path, 'rb')
-    R2File = gzip.open(R2path, 'rb')
+    R1File = gzipHandle(R1path)
+    R2File = gzipHandle(R2path)
     readTrue = 0
     outFile = open(outReadTable, 'w')
     outFile.write("Cell,Umi,Sample\n")
@@ -64,7 +64,3 @@ def main():
 
 if __name__ == "__main__":main()
 
-#     
-    
-#     with Pool(32) as p:
-#         print(p.map(preprocess, zip(r1_paths, r2_paths)))
