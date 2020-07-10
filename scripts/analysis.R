@@ -164,7 +164,8 @@ ggplot(reclass.res[-1, ], aes(x=ClassStability, y=MatchRate_mean)) +
   geom_errorbar(aes(ymin=MatchRate_mean-MatchRate_sd, ymax=MatchRate_mean+MatchRate_sd), width=.1) +
   geom_hline(yintercept = reclass.res$MatchRate_mean[1], color="red") +
   geom_hline(yintercept = reclass.res$MatchRate_mean[1]+3*reclass.res$MatchRate_sd[1], color="red",lty=2) +
-  geom_hline(yintercept = reclass.res$MatchRate_mean[1]-3*reclass.res$MatchRate_sd[1], color="red",lty=2)
+  geom_hline(yintercept = reclass.res$MatchRate_mean[1]-3*reclass.res$MatchRate_sd[1], color="red",lty=2) +
+  geom_vline(xintercept = 16, color="blue",lty=2)
 
 ## Finalize negative cell rescue results
 final.calls.rescued <- final.calls
@@ -178,6 +179,87 @@ readTable = as.data.frame(readTable)
 bar.table.de <- MULTIseq.align(readTable, cellIDS, bar.ref)
 
 
+barTable = fread('~/Documents/NMDA10x/multiSeq/outs/barTable.csv')
+barTable
+vec.bc1 = log2(barTable$TGAGACCT)#[,1]
+vec.bc1[vec.bc1 == -Inf] =0
+vec.bc1 = scale(vec.bc1, center = T, scale = F)[,1]
+hist(vec.bc1)
+ggplot(data=NULL, aes((vec.bc1)))+geom_density()
+require(KernSmooth)
+model <- tryCatch( { approxfun(bkde(vec.bc1, kernel="normal")) },
+                   error=function(e) { print(paste0("No threshold found for","...")) } )
+x <-  seq(from=quantile(vec.bc1,0.001), to=quantile(vec.bc1,0.999), length.out=100)
 
+bkde(vec.bc1, kernel="normal")
+localMaxima <- function(x) {
+  # Use -Inf instead if x is numeric (non-integer)
+  y <- diff(c(-.Machine$integer.max, x)) > 0L
+  rle(y)$lengths
+  y <- cumsum(rle(y)$lengths)
+  y <- y[seq.int(1L, length(y), 2L)]
+  if (x[[1]] == x[[2]]) {
+    y <- y[-1]
+  }
+  y
+}
+
+extrema <- localMaxima(model(x))
+low.extreme <- extrema[which.max(model(x)[extrema])]
+high.extreme <- max(extrema)
+thresh <- quantile(c(x[high.extreme], x[low.extreme]), 0.70)
+cell_i <- which(vec.bc1 >= thresh)
+out=data.frame(counts= barTable$TGAGACCT, norm.counts=vec.bc1, class='neg')
+out$class[cell_i] = 'Pos'
+ggplot(out, aes(norm.counts, fill=factor(class)))+geom_density()
+
+require(reshape2)
+call.list = barTable_sweep.list
+res <- as.data.frame(matrix(0L, nrow=length(call.list), ncol=4))
+colnames(res) <- c("q","pDoublet","pNegative","pSinglet")
+q.range <- unlist(strsplit(names(call.list), split="q="))
+res$q <- as.numeric(q.range[grep("0", q.range)])
+nCell <- length(call.list[[1]])
+
+for (i in 1:nrow(res)) {
+  temp <- table(call.list[[i]])
+  if ( "Doublet" %in% names(temp) == TRUE ) { res$pDoublet[i] <- temp[which(names(temp) == "Doublet")] }
+  if ( "Negative" %in% names(temp) == TRUE ) { res$pNegative[i] <- temp[which(names(temp) == "Negative")] }
+  res$pSinglet[i] <- sum(temp[which(names(temp) != "Doublet" & names(temp) != "Negative")])
+}
+
+res <- melt(res, id.vars="q")
+res[,4] <- res$value/nCell
+colnames(res)[2:4] <- c("Subset","nCells","Proportion")
+
+extrema <- res$q[localMaxima(res$Proportion[which(res$Subset == "pSinglet")])]
+
+
+
+
+
+bar.tsne=barTSNE(barTable = barTable[, 2:33])
+bar.tsne = as.data.frame(bar.tsne)
+pdf("~/Documents/NMDA10x/multiSeq/outs/bc.check.pdf")
+for (i in 3:ncol(bar.tsne)) {
+  g <- ggplot(bar.tsne, aes(x = TSNE1, y = TSNE2, color = bar.tsne[,i])) +
+    geom_point() +
+    scale_color_gradient(low = "black", high = "red") +
+    ggtitle(colnames(bar.tsne)[i]) +
+    theme(legend.position = "none") 
+  print(g)
+}
+dev.off()
+
+
+setDT(bar.tsne)
+ggplot(bar.tsne, aes(TSNE1, TSNE2, color=GGAGAAGA))+geom_point(alpha=0.2)+
+  scale_color_gradient(low = "black", high = "red")
+bar.tsne$CELL.ID = barTable$cellID
+bar.tsne.melt=melt(bar.tsne, id.vars = c("TSNE1","TSNE2", "CELL.ID"))
+require(tidyverse)
+ggplot(bar.tsne.melt, aes(TSNE1, TSNE2, color=value))+geom_point(size=0.1)+
+  scale_color_viridis_c()+facet_wrap(~variable, nrow = 8, ncol = 4)+theme_gdocs(base_size = 8)
+ggsave('~/Documents/NMDA10x/multiSeq/outs/bc.check.png', device = 'png', width = 8, height = 10, dpi = 500)
 
 
