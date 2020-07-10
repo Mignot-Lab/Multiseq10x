@@ -20,5 +20,5 @@ The `makeBarMatrix.py` requires 4 arguments.
 3. The `-B` is the multi-seq barcodes that are needed.   
 4. The `-O` is the output filename for the barmatrix file.  
 
-A typical command would be
+A typical command would be  
 usage `makeBarMatrix.py -C cellIds.txt -R readTable.csv -B data/multiSeqBarcodes_1_to_32.txt -O barMatrix.csv`.
