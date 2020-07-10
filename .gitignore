@@ -7,3 +7,7 @@
 *.json
 *.png
 __pycache__
+analysis.R
+slurmCommands.py
+readTableSlurm.py
+kdeEstimator.py
