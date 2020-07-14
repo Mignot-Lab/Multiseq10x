@@ -1,6 +1,5 @@
 import gzip
 from collections import defaultdict
-import distance
 import argparse
 
 
@@ -11,13 +10,40 @@ def gzipHandle(fileName):
         fileOut = open(fileName, 'rb')
     return fileOut
 
+def hamming(seq1, seq2, normalized=False):
+	"""
+    adapted from Distance package by https://raw.githubusercontent.com/doukremt/distance/master/distance/_simpledists.py
+    Compute the Hamming distance between the two sequences `seq1` and `seq2`.
+	The Hamming distance is the number of differing items in two ordered
+	sequences of the same length. If the sequences submitted do not have the
+	same length, an error will be raised.
+	
+	If `normalized` evaluates to `False`, the return value will be an integer
+	between 0 and the length of the sequences provided, edge values included;
+	otherwise, it will be a float between 0 and 1 included, where 0 means
+	equal, and 1 totally different. Normalized hamming distance is computed as:
+	
+		0.0                         if len(seq1) == 0
+		hamming_dist / len(seq1)    otherwise
+
+	"""
+	L = len(seq1)
+	if L != len(seq2):
+		raise ValueError("expected two strings of the same length")
+	if L == 0:
+		return 0.0 if normalized else 0  # equal
+	dist = sum(c1 != c2 for c1, c2 in zip(seq1, seq2))
+	if normalized:
+		return dist / float(L)
+	return dist
+
 def tagDist(tag, bcList):
     '''returns 1 mismatch tag closest sample barcode
     example tag = 'GGAGAAGG'
     tagDist(tag, bcList)
     '''
     if tag:
-        tagDist=[distance.hamming(tag, i) for i in bcList]
+        tagDist=[hamming(tag, i) for i in bcList]
         if min(tagDist) == 1:
             simTagind = tagDist.index(min(tagDist))
             outTag = bcList[simTagind]
