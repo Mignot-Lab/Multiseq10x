@@ -1,8 +1,10 @@
 import gzip
 from collections import defaultdict
 import argparse
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 import json
+
+nCPUs=cpu_count()-1
 
 def gzipHandle(fileName):
     if '.gz' in fileName:
@@ -153,13 +155,27 @@ def writeBartable(outFile, bcList, barDict, umiCounterDict, umiTotalDict):
 cellIds = 'Multi-seq7_S95_L003_cell.barcode'
 cellSet = processCellIds(cellIds)
 bcList = [i.strip() for i in open('multiSeqBarcodes_1_to_32.txt')]
-readTable = 'test_ReadTable.csv.gz'
+readTable = 'Multi-seq7_S95_L003_ReadTable.csv.gz'
 readList=bucketReadTable(readTable, buckets=50)
-parallelArgs=[(i, cellSet, bcList) for i in readList][:5]
-
-barDict, umiCounterDict, umiTotalDict = processReadtable(readList[0], cellSet, bcList)
-with Pool() as pool:
+parallelArgs=[(i, cellSet, bcList) for i in readList]#[:5]
+#barDict, umiCounterDict, umiTotalDict = processReadtable(readList[0], cellSet, bcList)
+import time
+t0 = time.time()
+with Pool(nCPUs) as pool:
     pool.starmap(processReadtable, parallelArgs)
+t1 = time.time()
+total = t1-t0
+print(total) ##135
+
+t0 = time.time()
+processReadtable(readTable, cellSet, bcList)
+t1 = time.time()
+totalNoT = t1-t0
+print(totalNoT)
+
+with open('test_ReadTable.json.gz') as jsFile:
+    outDict = json.load(jsFile)
+
 def main():
     parser = argparse.ArgumentParser(description='A script to make CELL.ID vs Barcode count when a ReadTable is input ')
     parser.add_argument('-C', help='Cell Ids list', required=True)
