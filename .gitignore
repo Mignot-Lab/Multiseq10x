@@ -6,7 +6,11 @@
 *.csv
 *.json
 *.png
+*.barcode
 __pycache__
+barTable*
+*.xlsx
+*.temp*
 analysis.R
 slurmCommands.py
 readTableSlurm.py
