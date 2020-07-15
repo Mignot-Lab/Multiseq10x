@@ -1,40 +1,64 @@
 import gzip
 from collections import defaultdict
 import argparse
-
+from multiprocessing import Pool
+import json
 
 def gzipHandle(fileName):
     if '.gz' in fileName:
-        fileOut = gzip.open(fileName, 'rb')
+        fileOut = gzip.open(fileName, 'rt')
     else:
-        fileOut = open(fileName, 'rb')
+        fileOut = open(fileName, 'rt')
     return fileOut
 
-def hamming(seq1, seq2, normalized=False):
+def blocks(files, size=65536):
+    while True:
+        b = files.read(size)
+        if not b: break
+        yield b
+
+def lineCounter(fileName):
+    f = gzipHandle(fileName)
+    lineCount=sum(bl.count("\n") for bl in blocks(f))
+    print('LINE COUNT AT {}'.format(lineCounter))
+    return lineCount
+
+def bucketReadTable(readTable, buckets):
+    lineC = lineCounter(readTable)
+    payLoad = int(lineC/buckets)
+    readTableHandle = gzipHandle(readTable)
+    readList = []
+    chunkId = 1
+    outName ='{}.temp_{}'.format(readTable.replace('.gz', ''), chunkId)
+    chunkFile = open(outName, 'w')
+    for n, line in enumerate(readTableHandle):
+        if n > 0:
+            chunkFile.write(line) # keep writing 
+            if n % payLoad == 0: ## if payload is reached spawn new file
+                chunkFile.close()
+                print(' BUCKETED {} CHUNKS'.format(chunkId))
+                chunkId += 1
+                outName = '{}.temp_{}'.format(readTable.replace('.gz', ''), chunkId)
+                chunkFile = open(outName, 'w')
+            if outName not in readList: # we will need this list to trigger multiprocessing run so return this iterator
+                readList.append(outName)
+    chunkFile.close()
+    return readList
+
+def hamming(seq1, seq2):
 	"""
     adapted from Distance package by https://raw.githubusercontent.com/doukremt/distance/master/distance/_simpledists.py
     Compute the Hamming distance between the two sequences `seq1` and `seq2`.
 	The Hamming distance is the number of differing items in two ordered
 	sequences of the same length. If the sequences submitted do not have the
 	same length, an error will be raised.
-	
-	If `normalized` evaluates to `False`, the return value will be an integer
-	between 0 and the length of the sequences provided, edge values included;
-	otherwise, it will be a float between 0 and 1 included, where 0 means
-	equal, and 1 totally different. Normalized hamming distance is computed as:
-	
-		0.0                         if len(seq1) == 0
-		hamming_dist / len(seq1)    otherwise
-
 	"""
 	L = len(seq1)
 	if L != len(seq2):
 		raise ValueError("expected two strings of the same length")
 	if L == 0:
-		return 0.0 if normalized else 0  # equal
+		return 0  # equal
 	dist = sum(c1 != c2 for c1, c2 in zip(seq1, seq2))
-	if normalized:
-		return dist / float(L)
 	return dist
 
 def tagDist(tag, bcList):
@@ -60,11 +84,12 @@ def processCellIds(cellIdFile):
     cellIds = gzipHandle(cellIdFile)
     cellSet = defaultdict(str)
     for n,cell in enumerate(cellIds):
-        cellParse = cell.decode().strip().split('-')[0]
+        cellParse = cell.strip().split('-')[0]
         cellSet[cellParse]= ''
     print('PROCESSED {} CELLS '.format(n))
     cellIds.close()
     return cellSet
+
 
 def processReadtable(readTable, cellSet, bcList):
     '''this function quantifies the frequency of cellids and sample barcode combinations
@@ -79,7 +104,7 @@ def processReadtable(readTable, cellSet, bcList):
     print(bcList)
     for n, line in enumerate(readTableHandle):
         if n > 0:
-            cell, umi, tag = line.decode().strip().split(',')
+            cell, umi, tag = line.strip().split(',')
             #print(tag)
             umiDict[cell].add('')
             umiTotalDict[cell] += 1
@@ -98,7 +123,10 @@ def processReadtable(readTable, cellSet, bcList):
                             umiCounterDict[cell] += 1
             if n % 10000 == 0:
                 print('PROCESSED {} READS '.format(n))
-    return[barDict, umiCounterDict, umiTotalDict]
+    jsonOut = readTable.replace('csv', 'json')
+    with open(jsonOut, 'w') as outDict:
+        json.dump(barDict, outDict)
+    #return[barDict, umiCounterDict, umiTotalDict]
             
 def writeBartable(outFile, bcList, barDict, umiCounterDict, umiTotalDict):
     outFile = open(outFile, 'w')
@@ -121,6 +149,17 @@ def writeBartable(outFile, bcList, barDict, umiCounterDict, umiTotalDict):
         outFile.write(outString +'\n')
     outFile.close()
 
+
+cellIds = 'Multi-seq7_S95_L003_cell.barcode'
+cellSet = processCellIds(cellIds)
+bcList = [i.strip() for i in open('multiSeqBarcodes_1_to_32.txt')]
+readTable = 'test_ReadTable.csv.gz'
+readList=bucketReadTable(readTable, buckets=50)
+parallelArgs=[(i, cellSet, bcList) for i in readList][:5]
+
+barDict, umiCounterDict, umiTotalDict = processReadtable(readList[0], cellSet, bcList)
+with Pool() as pool:
+    pool.starmap(processReadtable, parallelArgs)
 def main():
     parser = argparse.ArgumentParser(description='A script to make CELL.ID vs Barcode count when a ReadTable is input ')
     parser.add_argument('-C', help='Cell Ids list', required=True)
