@@ -1,6 +1,6 @@
 import os
 import gzip
-from collections import defaultdict
+from collections import defaultdict, Counter
 import argparse
 from multiprocessing import Pool, cpu_count
 import json
@@ -104,8 +104,8 @@ def processReadtable(readTable, cellSet, bcList):
     '''
     barDict = defaultdict(lambda:defaultdict(int))
     umiDict = defaultdict(set)
-    umiCounterDict = defaultdict(int)
-    umiTotalDict = defaultdict(int)
+    umiCounterDict = Counter()
+    umiTotalDict = Counter()
     readTableHandle = gzipHandle(readTable)
     print(bcList)
     for n, line in enumerate(readTableHandle):
@@ -137,8 +137,8 @@ def processReadtable(readTable, cellSet, bcList):
 
 def jsonParse(readList):
     barDict = defaultdict(lambda:defaultdict(int))
-    umiCounterDict = defaultdict(int)
-    umiTotalDict = defaultdict(int)
+    umiCounterDict = Counter()
+    umiTotalDict = Counter()
     for temp in readList:
         makeJson = temp.replace('csv', 'json')
         makeJsonumi = temp.replace('csv', 'umi.json')
@@ -159,11 +159,11 @@ def jsonParse(readList):
                     umiTotalDict[cell3] += ct3
         else:
             raise FileNotFoundError(makeJson)
-            os.remove(temp)
-            os.remove(makeJson)
-            os.remove(makeJsonumi)
-            os.remove(makeJsonumiTotal)
-        return [barDict, umiCounterDict, umiTotalDict]
+        os.remove(temp)
+        os.remove(makeJson)
+        os.remove(makeJsonumi)
+        os.remove(makeJsonumiTotal)
+    return [barDict, umiCounterDict, umiTotalDict]
 
 def writeBartable(outFile, bcList, barDict, umiCounterDict, umiTotalDict):
     outFile = open(outFile, 'w')
@@ -210,7 +210,7 @@ def main():
         pool.starmap(processReadtable, parallelArgs)
     t1 = time.time()
     total = t1-t0
-    print('PROCESSED READTABLES IN {:.2f} MINS'.format(round(total/60, 2)))
+    print('PROCESSED READTABLES IN {:.2f} MINS'.format(total/60))
     barDict, umiCounterDict, umiTotalDict = jsonParse(readList)
     writeBartable(outFile, bcList, barDict, umiCounterDict, umiTotalDict)
 
