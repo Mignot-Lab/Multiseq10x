@@ -134,27 +134,6 @@ def processReadtable(readTable, cellSet, bcList):
     jsonDump(barDict, jsonOut)
     jsonDump(umiCounterDict, umiOut)
     jsonDump(umiTotalDict, umiTotalOut)
-            
-def writeBartable(outFile, bcList, barDict, umiCounterDict, umiTotalDict):
-    outFile = open(outFile, 'w')
-    outFile.write('cellID,'+','.join(bcList)+',nUMI,nUMI_Total'+'\n')
-    for k, v in barDict.items():
-        outString =k
-        for bc in bcList:
-            if bc in v:
-                outString += ','+str(v.get(bc))
-            else:
-                outString += ','+'0'
-        if k in umiCounterDict:
-            outString += ','+str(umiCounterDict.get(k))
-        else:
-            outString += ','+'0'
-        if k in umiTotalDict:
-            outString += ','+str(umiTotalDict.get(k))
-        else:
-            outString += ','+'0'
-        outFile.write(outString +'\n')
-    outFile.close()
 
 def jsonParse(readList):
     barDict = defaultdict(lambda:defaultdict(int))
@@ -185,6 +164,29 @@ def jsonParse(readList):
         os.remove(makeJsonumi)
         os.remove(makeJsonumiTotal)
     return [barDict, umiCounterDict, umiTotalDict]
+
+def writeBartable(outFile, bcList, barDict, umiCounterDict, umiTotalDict):
+    outFile = open(outFile, 'w')
+    outFile.write('cellID,'+','.join(bcList)+',nUMI,nUMI_Total'+'\n')
+    for k, v in barDict.items():
+        outString =k
+        for bc in bcList:
+            if bc in v:
+                outString += ','+str(v.get(bc))
+            else:
+                outString += ','+'0'
+        if k in umiCounterDict:
+            outString += ','+str(umiCounterDict.get(k))
+        else:
+            outString += ','+'0'
+        if k in umiTotalDict:
+            outString += ','+str(umiTotalDict.get(k))
+        else:
+            outString += ','+'0'
+        outFile.write(outString +'\n')
+    outFile.close()
+
+
 
 def main():
     parser = argparse.ArgumentParser(description='A script to make CELL.ID vs Barcode count when a ReadTable is input ')
