@@ -146,24 +146,24 @@ def jsonParse(readList):
         if os.path.exists(makeJson) and os.path.exists(makeJsonumi) and os.path.exists(makeJsonumiTotal):
             with open(makeJson) as jsFile:
                 outDict = json.load(jsFile)
-                for cell, tag in outDict.items():
-                    for btag, ct in tag.items():
-                        barDict[cell][btag] += ct
+                for cell1, tag in outDict.items():
+                    for btag, ct1 in tag.items():
+                        barDict[cell1][btag] += ct1
             with open(makeJsonumi) as umiFile:
                 umiTempDict = json.load(umiFile)
-                for cell, ct in umiTempDict.items():
-                    umiCounterDict[cell] += ct
+                for cell2, ct2 in umiTempDict.items():
+                    umiCounterDict[cell2] += ct2
             with open(makeJsonumiTotal) as umiTotalFile:
                 umiTotalTempDict = json.load(umiTotalFile)
-                for cell, ct in umiTotalTempDict.items():
-                    umiCounterDict[cell] += ct
+                for cell3, ct3 in umiTotalTempDict.items():
+                    umiTotalDict[cell3] += ct3
         else:
             raise FileNotFoundError(makeJson)
-        os.remove(temp)
-        os.remove(makeJson)
-        os.remove(makeJsonumi)
-        os.remove(makeJsonumiTotal)
-    return [barDict, umiCounterDict, umiTotalDict]
+            os.remove(temp)
+            os.remove(makeJson)
+            os.remove(makeJsonumi)
+            os.remove(makeJsonumiTotal)
+        return [barDict, umiCounterDict, umiTotalDict]
 
 def writeBartable(outFile, bcList, barDict, umiCounterDict, umiTotalDict):
     outFile = open(outFile, 'w')
@@ -219,13 +219,12 @@ if __name__ == "__main__":main()
 # bcList = [i.strip() for i in open('data/multiSeqBarcodes_1_to_32.txt')]
 # readTable = gzip.open('data/testCompare.csv.gz')
 
-# cellIds = 'Multi-seq7_S95_L003_cell.barcode'
+# cellIds = 'data/Multi-seq7_S95_L003_cell.barcode'
 # cellSet = processCellIds(cellIds)
-# bcList = [i.strip() for i in open('multiSeqBarcodes_1_to_32.txt')]
-# readTable = 'Multi-seq7_S95_L003_ReadTable.csv.gz'
+# bcList = [i.strip() for i in open('data/multiSeqBarcodes_1_to_32.txt')]
+# readTable = 'data/testReadTable.csv.gz'
 # readList=bucketReadTable(readTable, buckets=50)
 # parallelArgs=[(i, cellSet, bcList) for i in readList]#[:5]
-# #barDict, umiCounterDict, umiTotalDict = processReadtable(readList[0], cellSet, bcList)
 # import time
 # t0 = time.time()
 # with Pool(nCPUs) as pool:
