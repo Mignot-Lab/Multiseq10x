@@ -8,6 +8,8 @@ import time
 
 
 def gzipHandle(fileName):
+	'''handles IO of inputs
+	'''
 	if '.gz' in fileName:
 		fileOut = gzip.open(fileName, 'rt')
 	else:
